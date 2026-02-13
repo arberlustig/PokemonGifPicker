@@ -1,5 +1,6 @@
 using Core.WebAPIExecuter;
 using PokemonGifPicker.Components;
+using Radzen;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,8 @@ builder.Services.AddHttpClient("PokeAPI", opt =>
     opt.BaseAddress = new Uri("https://pokeapi.co/api/v2/");
     opt.DefaultRequestHeaders.Add("Accept", "application/json");
 });
+
+builder.Services.AddRadzenComponents();
 
 var app = builder.Build();
 
