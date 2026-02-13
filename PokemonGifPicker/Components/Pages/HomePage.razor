@@ -1,0 +1,31 @@
+﻿@page "/"
+@using Core.APIModel
+@inject PokeApiExecuter pokeApiExecuter
+
+
+<PageTitle>Main Page
+</PageTitle>
+
+<h1>Hello, world!</h1>
+
+<button @onclick="debugpokemon">pikachu</button>
+@if (pokemonData != null)
+{
+    <img src="@pokemonData.sprites.other.showdown.front_default" />
+
+}
+
+
+@code {
+
+    private Root? pokemonData { get; set; } = null;
+
+    private async Task debugpokemon()
+    {
+      pokemonData = await pokeApiExecuter.GetPokemonResponse("pikachu");
+
+
+      Console.WriteLine("ahahas");
+    }
+
+}

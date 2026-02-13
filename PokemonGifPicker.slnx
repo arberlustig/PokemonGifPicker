@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ClassLibrary1/Core.csproj" />
+  <Project Path="PokemonGifPicker/PokemonGifPicker.csproj" />
+</Solution>
