@@ -1,0 +1,31 @@
+﻿
+<RadzenTextBox @bind-Value="@pokemonName" Change="PkmnNameChanged"></RadzenTextBox>
+@if (pokemonData != null && pokemonData.sprites != null)
+{
+    <img src="@pokemonData.sprites.other.showdown.front_default" />
+}
+
+@code {
+    private Root? pokemonData { get; set; } = null;
+    private string pokemonName { get; set; } = string.Empty;
+
+    private async Task PkmnNameChanged(string obj)
+    {
+        try
+        {
+            pokemonData = await pokeApiExecuter.GetPokemonResponse(obj);
+        }
+        catch (Exception e)
+        {
+           NotificationService.Notify(new NotificationMessage()
+           {
+               Severity = NotificationSeverity.Error,
+               Detail = "Your pokemon was not found.",
+               Duration = 4000,
+               
+           });
+        }
+    }
+
+
+}
