@@ -1,31 +1,158 @@
-﻿
-<RadzenTextBox @bind-Value="@pokemonName" Change="PkmnNameChanged"></RadzenTextBox>
-@if (pokemonData != null && pokemonData.sprites != null)
-{
-    <img src="@pokemonData.sprites.other.showdown.front_default" />
-}
+﻿<div class="pokemon-card">
+    <div class="pokemon-container">
+        @if (pokemonData != null && pokemonData.sprites != null)
+        {
+            <img class="pokemon-sprite" src="@selectedPokemonVersion" />
+            <p>@pokemonData.id</p>
+        }
+
+        <img class="pokeball-icon" src="images/Poké_Ball_icon.svg.png" />
+    </div>
+
+    <RadzenTextBox @bind-Value="@pokemonName"
+                   Change="PkmnNameChanged" Placeholder="Enter pokemon name">
+
+    </RadzenTextBox>
+    <RadzenDropDown @bind-Value="selectedPokemonVersion" Data="pokemonVersions">
+        <Template>
+            <div class="dropdown-item-container">
+                <img src="@context" class="dropdown-pokemon-sprite" />
+            </div>
+        </Template>
+    </RadzenDropDown>
+
+    <RadzenButton Click="Evolution">Evolution</RadzenButton>
+</div>
 
 @code {
     private Root? pokemonData { get; set; } = null;
     private string pokemonName { get; set; } = string.Empty;
+    private string selectedPokemonVersion { get; set; } = string.Empty;
+    private List<string> pokemonVersions { get; set; } = new List<string>();
 
     private async Task PkmnNameChanged(string obj)
     {
         try
         {
-            pokemonData = await pokeApiExecuter.GetPokemonResponse(obj);
+            pokemonData = await pokeApiExecuter.GetPokemonByName(obj.ToLower());
+
+            if (pokemonData != null && pokemonData.sprites?.versions != null)
+            {
+                pokemonVersions.Clear();
+                selectedPokemonVersion = string.Empty;
+
+                AddingPngAndGifPicturesFromPokemon();
+
+                var showdown = pokemonData.sprites.other?.showdown;
+
+                if (showdown != null)
+                {
+                    var frontSprites = showdown.GetType()
+                        .GetProperties()
+                        .Where(x => x.Name.StartsWith("front", StringComparison.InvariantCultureIgnoreCase))
+                        .Select(x => x.GetValue(showdown) as string)
+                        .Where(url => !string.IsNullOrEmpty(url));
+
+                    pokemonVersions.AddRange(frontSprites);
+                }
+
+                if (pokemonVersions.Any())
+                {
+                    selectedPokemonVersion = pokemonVersions.First();
+                }
+            }
         }
         catch (Exception e)
         {
-           NotificationService.Notify(new NotificationMessage()
-           {
-               Severity = NotificationSeverity.Error,
-               Detail = "Your pokemon was not found.",
-               Duration = 4000,
-               
-           });
+            NotificationService.Notify(new NotificationMessage()
+            {
+                Severity = NotificationSeverity.Error,
+                Detail = "Your pokemon was not found.",
+                Duration = 4000
+            });
         }
     }
 
+    private void AddingPngAndGifPicturesFromPokemon()
+    {
+        foreach (var (generationName, kvpGameWithSprite) in pokemonData.sprites.versions)
+        {
+            foreach (var (version, gamespriteObject) in kvpGameWithSprite)
+            {
+                if (!string.IsNullOrEmpty(gamespriteObject.front_default))
+                {
+                    pokemonVersions.Add(gamespriteObject.front_default);
+                }
+            }
+        }
+    }
+
+    private async Task Evolution()
+    {
+        try
+        {
+            var user = await pokeApiExecuter.GetPokemonBySpeciesName(pokemonName.ToLower());
+
+            string cleanUrl = user.evolution_chain.url.TrimEnd('/');
+            int lastSlashIndex = cleanUrl.LastIndexOf('/');
+
+            string id = cleanUrl.Substring(lastSlashIndex + 1);
+
+            var evolutionChainReponse = await pokeApiExecuter.GetEvolutionChain(id);
+
+            var newPokemonName = GetNextEvolutionName(evolutionChainReponse.chain, pokemonName);
+
+            if (newPokemonName.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
+                throw new Exception();
+
+            pokemonName = newPokemonName;
+
+            await PkmnNameChanged(newPokemonName);
+
+        }
+        catch (Exception e)
+        {
+            NotificationService.Notify(new NotificationMessage()
+            {
+                Severity = NotificationSeverity.Error,
+                Detail = "Your pokemon has no evolution stages anymore",
+                Duration = 4000,
+            });
+        }
+    }
+
+    private string GetNextEvolutionName(ChainLink chain, string currentPokemonName)
+    {
+        try
+        {
+            if (chain.evolves_to.Any())
+            {
+                if (chain.species.name == currentPokemonName)
+                {
+                    return chain.evolves_to[0].species.name;
+                }
+
+                if (chain.evolves_to[0].species.name == currentPokemonName)
+                {
+                    if (chain.evolves_to[0].evolves_to.Any())
+                        return chain.evolves_to[0].evolves_to[0].species.name;
+
+                }
+            }
+
+            return currentPokemonName;
+        }
+        catch (Exception ex)
+        {
+            NotificationService.Notify(new NotificationMessage()
+            {
+                Severity = NotificationSeverity.Error,
+                Detail = "This pokemon has no evolution stages",
+                Duration = 4000
+            });
+        }
+
+        return null;
+    }
 
 }

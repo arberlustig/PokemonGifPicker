@@ -4,18 +4,40 @@
 @inject PokeApiExecuter pokeApiExecuter
 
 
-<PageTitle>Main Page
+<PageTitle>
+    Main Page
 </PageTitle>
 
-<h1>Hello, world!</h1>
+<RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" Wrap="FlexWrap.Wrap">
+    <RadzenButton Click="LineMode" Style="border-radius:20px;" ButtonStyle="ButtonStyle.Danger" >Line Mode</RadzenButton>
+    <RadzenButton Style="border-radius:20px;" ButtonStyle="ButtonStyle.Danger" Click =" GridMode">Grid Mode</RadzenButton>
+</RadzenStack>
 
-<PokemonSearch></PokemonSearch>
-<PokemonSearch></PokemonSearch>
-<PokemonSearch></PokemonSearch>
-<PokemonSearch></PokemonSearch>
+
+
+
+<div class="@cssStyle">
+    <PokemonSearch></PokemonSearch>
+    <PokemonSearch></PokemonSearch>
+    <PokemonSearch></PokemonSearch>
+    <PokemonSearch></PokemonSearch>
+    <PokemonSearch></PokemonSearch>
+    <PokemonSearch></PokemonSearch>
+</div>
 
 
 @code {
 
-  
+    public string cssStyle { get; set; } = "pokemon-row";
+
+    private void LineMode()
+    {
+        cssStyle = "pokemon-row";
+    }
+
+    private void GridMode()
+    {
+        cssStyle = "pokemon-grid";
+    }
+
 }
