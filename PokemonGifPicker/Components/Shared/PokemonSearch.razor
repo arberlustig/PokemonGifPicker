@@ -20,7 +20,9 @@
             </div>
         </Template>
     </RadzenDropDown>
-
+    
+    
+    @* falls das Pokemon mehrere Evolutionsmöglichkeiten beim nächsten Upgrade besitzt*@
     @if (evolutionVersions.Any())
     {
         <RadzenDropDown @bind-Value="selectedPokemonEvolution"
@@ -29,7 +31,6 @@
                         Placeholder="Select evolution version of the pokemon">
             <Template>
                 <div class="dropdown-item-container">
-
                     <p>@context</p>
                 </div>
             </Template>
@@ -48,21 +49,14 @@
     public string selectedPokemonEvolution { get; set; } = string.Empty;
     public List<string> evolutionVersions { get; set; } = new List<string>();
 
-    protected override async Task OnInitializedAsync()
-    {
-        NotificationService.Notify(new NotificationMessage()
-        {
-            Duration = 10000,
-            Severity = NotificationSeverity.Info,
-            Detail = "Some pokemon selection are not supported. Meowstic f.e. is not available to select because it is not listed as a normal pokemon. Instead, its a species name."
-        });
-        await base.OnInitializedAsync();
-    }
+ 
 
     private async Task PkmnNameChanged(string? obj)
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(obj)) return;
+
             pokemonData = await pokeApiExecuter.GetPokemonByName(obj.ToLower());
 
             if (pokemonData != null && pokemonData.sprites?.versions != null)
@@ -70,8 +64,7 @@
                 pokemonVersions.Clear();
                 selectedPokemonVersion = string.Empty;
 
-
-
+                //showdown beinhaltet alle gifs für das pokemon (wieso man es auch immer showdown nennt in der api...)
                 var showdown = pokemonData.sprites.other?.showdown;
 
                 if (showdown != null)
@@ -84,21 +77,22 @@
 
                     pokemonVersions.AddRange(frontSprites);
                 }
+
                 AddingPngAndGifPicturesFromPokemon();
+
                 if (pokemonVersions.Any())
                 {
                     selectedPokemonVersion = pokemonVersions.First();
                 }
             }
+            else
+            {
+                ShowNotification("Pokemon not found via API.", NotificationSeverity.Warning);
+            }
         }
         catch (Exception e)
         {
-            NotificationService.Notify(new NotificationMessage()
-            {
-                Severity = NotificationSeverity.Error,
-                Detail = "Your pokemon was not found.",
-                Duration = 4000
-            });
+            ShowNotification("An error occurred while loading the pokemon. Please try again.", NotificationSeverity.Error);
         }
     }
 
@@ -120,17 +114,24 @@
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(pokemonName))
+            {
+                ShowNotification("Please enter a pokemon name first.", NotificationSeverity.Warning);
+                return;
+            }
+
             var speciesName = pokemonData?.species?.name ?? pokemonName.ToLower().Trim();
             var speciesResponse = await pokeApiExecuter.GetPokemonBySpeciesName(speciesName);
 
             if (speciesResponse?.evolution_chain == null)
-                throw new Exception("No evolution chain for this species found");
-
+            {
+                ShowNotification("No evolution chain found for this species.", NotificationSeverity.Warning);
+                return;
+            }
 
             string cleanUrl = speciesResponse.evolution_chain.url.TrimEnd('/');
             string id = cleanUrl.Substring(cleanUrl.LastIndexOf('/') + 1);
             var evolutionChainReponse = await pokeApiExecuter.GetEvolutionChain(id);
-
 
             var newPokemonName = GetNextEvolutionName(evolutionChainReponse.chain, speciesName);
 
@@ -141,7 +142,8 @@
 
             if (string.IsNullOrEmpty(newPokemonName) || newPokemonName.Equals(speciesName, StringComparison.CurrentCultureIgnoreCase))
             {
-                throw new Exception("End of evolution chain");
+                ShowNotification("Your pokemon has no evolution stages anymore", NotificationSeverity.Info);
+                return;
             }
 
             pokemonName = newPokemonName;
@@ -149,48 +151,34 @@
         }
         catch (Exception e)
         {
-            NotificationService.Notify(new NotificationMessage()
-            {
-                Severity = NotificationSeverity.Error,
-                Detail = "Your pokemon has no evolution stages anymore",
-                Duration = 4000,
-            });
+            ShowNotification("Unexpected error during evolution search.", NotificationSeverity.Error);
         }
     }
 
     private string GetNextEvolutionName(ChainLink rootChain, string currentPokemonName)
     {
-        try
-        {
-
-            string nextEvolution = RecursionMethod(rootChain, currentPokemonName);
-
-
-            if (string.IsNullOrEmpty(nextEvolution))
-            {
-                throw new Exception("Keine Entwicklung gefunden");
-            }
-
-            return nextEvolution;
-        }
-        catch (Exception ex)
-        {
-            NotificationService.Notify(new NotificationMessage()
-            {
-                Severity = NotificationSeverity.Error,
-                Detail = "This pokemon has no evolution stages",
-                Duration = 4000
-            });
-        }
-
-        return null;
+        var nextEvolution = RecursionMethod(rootChain, currentPokemonName);
+        return string.IsNullOrEmpty(nextEvolution) ? string.Empty : nextEvolution;
     }
 
     private async Task EvolutionChange(object obj)
     {
-        evolutionVersions.Clear();
-        await PkmnNameChanged(obj as string);
+        var newPokemonName = obj as string;
 
+        evolutionVersions.Clear();
+        pokemonName = newPokemonName;
+        await PkmnNameChanged(newPokemonName);
+
+    }
+
+    private void ShowNotification(string detail, NotificationSeverity severity)
+    {
+        NotificationService.Notify(new NotificationMessage()
+        {
+            Severity = severity,
+            Detail = detail,
+            Duration = 4000
+        });
     }
 
     private string RecursionMethod(ChainLink node, string currentPokeName)
@@ -200,7 +188,7 @@
         {
             if (!node.evolves_to.Any())
             {
-                return string.Empty;
+                return node.species.name;
             }
 
             if (node.evolves_to.Count == 1)
@@ -222,9 +210,7 @@
 
         foreach (var childNode in node.evolves_to)
         {
-
             string result = RecursionMethod(childNode, currentPokeName);
-
 
             if (!string.IsNullOrEmpty(result))
             {

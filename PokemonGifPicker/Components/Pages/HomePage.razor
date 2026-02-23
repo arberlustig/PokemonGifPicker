@@ -3,14 +3,19 @@
 
 @inject PokeApiExecuter pokeApiExecuter
 
+<style>
+    body {
+        background-color: @color !important;
+    }
+</style>
 
 <PageTitle>
     Main Page
 </PageTitle>
 
 <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" Wrap="FlexWrap.Wrap">
-    <RadzenButton Click="LineMode" Style="border-radius:20px;" ButtonStyle="ButtonStyle.Danger" >Line Mode</RadzenButton>
-    <RadzenButton Style="border-radius:20px;" ButtonStyle="ButtonStyle.Danger" Click =" GridMode">Grid Mode</RadzenButton>
+    <RadzenButton Click="LineMode" Style="border-radius:20px;" ButtonStyle="ButtonStyle.Danger">Line Mode</RadzenButton>
+    <RadzenColorPicker @bind-Value=@color ShowHSV="true" ShowRGBA="true" ShowColors="true" ShowButton="true" />
 </RadzenStack>
 
 
@@ -29,6 +34,18 @@
 @code {
 
     public string cssStyle { get; set; } = "pokemon-row";
+    public string color { get; set; } = "pokemon-row";
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationService.Notify(new NotificationMessage()
+        {
+            Duration = 20000,
+            Severity = NotificationSeverity.Info,
+            Detail = "Some pokemon selection are not supported yet. Meowstic f.e. is not available to select because it is not listed as a normal pokemon. Instead, its a species name. Bear in mind - your selection will be gone after closing the tab for now. This will be resolved in the future as well!"
+        });
+        await base.OnInitializedAsync();
+    }
 
     private void LineMode()
     {
