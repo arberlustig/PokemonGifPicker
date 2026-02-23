@@ -3,17 +3,17 @@
         @if (pokemonData != null && pokemonData.sprites != null)
         {
             <img class="pokemon-sprite" src="@selectedPokemonVersion" />
-            <p>@pokemonData.id</p>
         }
 
         <img class="pokeball-icon" src="images/Poké_Ball_icon.svg.png" />
     </div>
 
     <RadzenTextBox @bind-Value="@pokemonName"
-                   Change="PkmnNameChanged" Placeholder="Enter pokemon name">
+                   Change="PkmnNameChanged"
+                   Placeholder="Enter pokemon name">
 
     </RadzenTextBox>
-    <RadzenDropDown @bind-Value="selectedPokemonVersion" Data="pokemonVersions">
+    <RadzenDropDown @bind-Value="selectedPokemonVersion" Data="pokemonVersions" Placeholder="Select pokemon sprite">
         <Template>
             <div class="dropdown-item-container">
                 <img src="@context" class="dropdown-pokemon-sprite" />
@@ -21,7 +21,22 @@
         </Template>
     </RadzenDropDown>
 
-    <RadzenButton Click="Evolution">Evolution</RadzenButton>
+    @if (evolutionVersions.Any())
+    {
+        <RadzenDropDown @bind-Value="selectedPokemonEvolution"
+                        Data="evolutionVersions"
+                        Change="EvolutionChange"
+                        Placeholder="Select evolution version of the pokemon">
+            <Template>
+                <div class="dropdown-item-container">
+
+                    <p>@context</p>
+                </div>
+            </Template>
+        </RadzenDropDown>
+    }
+
+    <RadzenButton Style="border-radius:15px;" Click="Evolution">Evolution</RadzenButton>
 </div>
 
 @code {
@@ -30,7 +45,21 @@
     private string selectedPokemonVersion { get; set; } = string.Empty;
     private List<string> pokemonVersions { get; set; } = new List<string>();
 
-    private async Task PkmnNameChanged(string obj)
+    public string selectedPokemonEvolution { get; set; } = string.Empty;
+    public List<string> evolutionVersions { get; set; } = new List<string>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationService.Notify(new NotificationMessage()
+        {
+            Duration = 10000,
+            Severity = NotificationSeverity.Info,
+            Detail = "Some pokemon selection are not supported. Meowstic f.e. is not available to select because it is not listed as a normal pokemon. Instead, its a species name."
+        });
+        await base.OnInitializedAsync();
+    }
+
+    private async Task PkmnNameChanged(string? obj)
     {
         try
         {
@@ -41,7 +70,7 @@
                 pokemonVersions.Clear();
                 selectedPokemonVersion = string.Empty;
 
-                AddingPngAndGifPicturesFromPokemon();
+
 
                 var showdown = pokemonData.sprites.other?.showdown;
 
@@ -55,7 +84,7 @@
 
                     pokemonVersions.AddRange(frontSprites);
                 }
-
+                AddingPngAndGifPicturesFromPokemon();
                 if (pokemonVersions.Any())
                 {
                     selectedPokemonVersion = pokemonVersions.First();
@@ -91,24 +120,32 @@
     {
         try
         {
-            var user = await pokeApiExecuter.GetPokemonBySpeciesName(pokemonName.ToLower());
+            var speciesName = pokemonData?.species?.name ?? pokemonName.ToLower().Trim();
+            var speciesResponse = await pokeApiExecuter.GetPokemonBySpeciesName(speciesName);
 
-            string cleanUrl = user.evolution_chain.url.TrimEnd('/');
-            int lastSlashIndex = cleanUrl.LastIndexOf('/');
+            if (speciesResponse?.evolution_chain == null)
+                throw new Exception("No evolution chain for this species found");
 
-            string id = cleanUrl.Substring(lastSlashIndex + 1);
 
+            string cleanUrl = speciesResponse.evolution_chain.url.TrimEnd('/');
+            string id = cleanUrl.Substring(cleanUrl.LastIndexOf('/') + 1);
             var evolutionChainReponse = await pokeApiExecuter.GetEvolutionChain(id);
 
-            var newPokemonName = GetNextEvolutionName(evolutionChainReponse.chain, pokemonName);
 
-            if (newPokemonName.Equals(pokemonName, StringComparison.CurrentCultureIgnoreCase))
-                throw new Exception();
+            var newPokemonName = GetNextEvolutionName(evolutionChainReponse.chain, speciesName);
+
+            if (evolutionVersions.Any())
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(newPokemonName) || newPokemonName.Equals(speciesName, StringComparison.CurrentCultureIgnoreCase))
+            {
+                throw new Exception("End of evolution chain");
+            }
 
             pokemonName = newPokemonName;
-
             await PkmnNameChanged(newPokemonName);
-
         }
         catch (Exception e)
         {
@@ -121,26 +158,20 @@
         }
     }
 
-    private string GetNextEvolutionName(ChainLink chain, string currentPokemonName)
+    private string GetNextEvolutionName(ChainLink rootChain, string currentPokemonName)
     {
         try
         {
-            if (chain.evolves_to.Any())
+
+            string nextEvolution = RecursionMethod(rootChain, currentPokemonName);
+
+
+            if (string.IsNullOrEmpty(nextEvolution))
             {
-                if (chain.species.name == currentPokemonName)
-                {
-                    return chain.evolves_to[0].species.name;
-                }
-
-                if (chain.evolves_to[0].species.name == currentPokemonName)
-                {
-                    if (chain.evolves_to[0].evolves_to.Any())
-                        return chain.evolves_to[0].evolves_to[0].species.name;
-
-                }
+                throw new Exception("Keine Entwicklung gefunden");
             }
 
-            return currentPokemonName;
+            return nextEvolution;
         }
         catch (Exception ex)
         {
@@ -154,5 +185,56 @@
 
         return null;
     }
+
+    private async Task EvolutionChange(object obj)
+    {
+        evolutionVersions.Clear();
+        await PkmnNameChanged(obj as string);
+
+    }
+
+    private string RecursionMethod(ChainLink node, string currentPokeName)
+    {
+
+        if (node.species.name.Equals(currentPokeName, StringComparison.InvariantCultureIgnoreCase))
+        {
+            if (!node.evolves_to.Any())
+            {
+                return string.Empty;
+            }
+
+            if (node.evolves_to.Count == 1)
+            {
+                return node.evolves_to[0].species.name;
+            }
+
+            if (node.evolves_to.Count > 1)
+            {
+                evolutionVersions.Clear();
+                foreach (var evolution in node.evolves_to)
+                {
+                    evolutionVersions.Add(evolution.species.name);
+                }
+
+                return currentPokeName;
+            }
+        }
+
+        foreach (var childNode in node.evolves_to)
+        {
+
+            string result = RecursionMethod(childNode, currentPokeName);
+
+
+            if (!string.IsNullOrEmpty(result))
+            {
+                return result;
+            }
+        }
+
+        return string.Empty;
+
+    }
+
 
 }
